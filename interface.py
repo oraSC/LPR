@@ -7,13 +7,13 @@ var1 = tk.StringVar()
 #var1.set("1234")    对tkinter变量进行赋值
 la = tk.Label(window,bg = "red",width = 20, height = 2,textvariable = var1)
 la.pack()
+def show_scale_selection(num):
+    var1.set(num)
 
+sc = tk.Scale(window , label = "my scale",orient = tk.HORIZONTAL ,  length = 200, showvalue = 0 ,from_ = 0 ,to = 10 ,
+              tickinterval = 2,resolution = 0.01,command = show_scale_selection)
 
-#可以添加回调函数
-r1 = tk.Radiobutton(window, text = "true",variable = var1 , value = "true")
-r2 = tk.Radiobutton(window, text = "true",variable = var1 , value = "false")
+sc.pack()
 
-r2.pack()
-r1.pack()
 
 window.mainloop()
