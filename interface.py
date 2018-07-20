@@ -3,23 +3,12 @@ window = tk.Tk()
 window.title("my_window")
 window.geometry("500x500")
 
-var1 = tk.StringVar()
-#var1.set("1234")    对tkinter变量进行赋值
-la = tk.Label(window,bg = "red",width = 20, height = 2,textvariable = var1)
-la.pack()
-def show_checkbutton():
-    if (var2.get() == 1)and(var3.get() == 0) :
-        var1.set("ture")
-    if (var2.get() == 0)and(var3.get() == 1) :
-        var1.set("false")
-    if ((var2.get() == 0) and (var3.get() == 0))or((var2.get() == 1) and (var3.get() == 1)):
-        var1.set("uncertain")
-#创建tkinter特有变量Int
-var2 = tk.IntVar()
-var3 = tk.IntVar()
-c1 = tk.Checkbutton(window , text = "true" , variable = var2 , onvalue = 1 ,offvalue = 0 ,command = show_checkbutton)
-c2 = tk.Checkbutton(window , text = "false" , variable = var3 , onvalue = 1 ,offvalue = 0 ,command = show_checkbutton)
-c1.pack()
-c2.pack()
+ca = tk.Canvas(window , bg = "yellow" , height = 200 , width = 200)
+ca.pack()
+#放置照片
+gif_file = tk.PhotoImage(file = "E:\\ancient_docment\\win7_64\\document\\python_code\\opencv_python\\picture\\30.gif")
+gif = ca.create_image(10,10,anchor = "nw",image = gif_file ,)
+#画线
+ca.create_line(50,50,90,90)
 
 window.mainloop()
