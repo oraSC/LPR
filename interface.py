@@ -1,3 +1,13 @@
+import tkinter as tk
+window = tk.Tk()
+window.title("my_window")
+window.geometry("500x500")
+
+var = tk.IntVar()
+var.set(0)
+def fun():
+    var.set(var.get() +1)
+
 class employee:
     #所有employee公有元素
     employee_num = 0
