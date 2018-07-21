@@ -2,8 +2,9 @@ import tkinter as tk
 from tkinter.filedialog import *
 from tkinter import ttk
 import cv2
-import numpy as np
 from PIL import Image,ImageTk
+from LPR import predict
+
 
 #定义一个Interface类，继承ttk.Frame
 class Interface(ttk.Frame):
@@ -94,3 +95,4 @@ if __name__ == '__main__':
     interface = Interface(win)
 
     win.mainloop()
+    predict.test()
