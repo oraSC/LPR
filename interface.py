@@ -48,9 +48,10 @@ class Interface(ttk.Frame):
             self.color_ctl = ttk.Label(frame_right1, text="", width="20")
             self.color_ctl.grid(column=0, row=4, sticky=tk.W)
             #frame_right2
-            from_pic_ctl = ttk.Button(frame_right2, text="来自图片", width=20, command=self.from_pic)
+            from_pic_button = ttk.Button(frame_right2, text="来自图片", width=20, command=self.from_pic)
             # from_vedio_ctl = ttk.Button(frame_right2, text="来自摄像头", width=20, command=self.from_vedio)
-            from_pic_ctl.pack(anchor="se", pady="1")
+            from_pic_button.pack(anchor="se", pady="1")
+            self.predictor = predict.carpredictor()
 
         def get_imgtk(self, img_bgr):
             #bgr颜色空间转化为rgb颜色空间
@@ -86,7 +87,7 @@ class Interface(ttk.Frame):
                 #将cv2 format（numpy.ndarray） 格式转化为tkinter image
                 self.imgtk = self.get_imgtk(img_bgr)
                 self.image_ctl.configure(image=self.imgtk)
-
+                self.predictor.find_carplate(img_bgr)
 
 if __name__ == '__main__':
     win = tk.Tk()
@@ -95,4 +96,4 @@ if __name__ == '__main__':
     interface = Interface(win)
 
     win.mainloop()
-    predict.test()
+
