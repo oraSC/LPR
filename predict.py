@@ -68,19 +68,22 @@ class carpredictor:
         #高斯模糊处理
         gauss_img = cv2.GaussianBlur(media_blue_img, (self.gaussian_blur,self.gaussian_blur) , 0)
         gray_gauss_img = cv2.cvtColor(gauss_img.copy(),cv2.COLOR_BGR2GRAY)
+        # sobel_img1 = cv2.Sobel(gray_gauss_img, cv2.CV_8U, 1, 0, ksize=3)
+        # ret, thresh_img1 = cv2.threshold(sobel_img1, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         #形态学变换
         opening_kernel = np.ones((20,20),np.uint8)
         opening_img = cv2.morphologyEx(gray_gauss_img , cv2.MORPH_OPEN,opening_kernel)
+        # cv2.imshow("sobel_img",sobel_img1)
         addweight_opening_img = cv2.addWeighted(gray_gauss_img, 1, opening_img, -1, 0)
         #二值化
         ret , thresh_img = cv2.threshold(addweight_opening_img , 0 ,255 , cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        #canny边缘检测
-        canny_img = cv2.Canny(thresh_img , 100 ,200)
+        #边缘检测
+        sobel_img = cv2.Sobel(thresh_img, cv2.CV_8U, 1, 0, ksize=3)
         #形态学变换
-        morhology_kernel = np.ones((self.cfg["morphologyr"],self.cfg["morphologyr"]),np.uint8)
+        element = cv2.getStructuringElement(cv2.MORPH_RECT, (23, 1))
         # morphology_img1 = cv2.morphologyEx(canny_img,cv2.MORPH_CLOSE , morhology_kernel)
         # morphology_img2 = cv2.morphologyEx(morphology_img1, cv2.MORPH_CLOSE, morhology_kernel)
-        morphology_img1 = cv2.dilate(canny_img,  morhology_kernel,iterations = 1)
+        morphology_img1 = cv2.dilate(sobel_img,  element,iterations = 1)
         morphology_img2 = morphology_img1
         #寻找轮廓（车牌矩形）
         outline_img , contours , hierarchy = cv2.findContours(morphology_img2.copy() ,cv2.RETR_TREE , cv2.CHAIN_APPROX_NONE )
@@ -110,7 +113,7 @@ class carpredictor:
             draw_area_rect_img = cv2.drawContours(draw_area_rect_img, [box], 0, (0, 0, 255), 2)
             print("ratio1: ", ratio1 ,"ratio2: " , ratio2)
             #符合长宽比
-            if (ratio1 > 2 and ratio1 < 5)or(ratio2 > 2 and ratio2 <5):
+            if (ratio1 > 2 and ratio1 < 5)or(ratio2 > 2 and ratio2 <5.3):
                 draw_ratio_rect_img = cv2.drawContours(draw_ratio_rect_img, [box], 0, (0, 0, 255), 2)
                 ratiotrue_num += 1
         print("长宽比有效矩形：" , ratiotrue_num)
@@ -124,7 +127,7 @@ class carpredictor:
         plt.figure("image processing"), plt.subplot(335), plt.imshow(opening_img, "gray"), plt.title("opening_img"),plt.axis("off")
         plt.figure("image processing"), plt.subplot(336), plt.imshow(addweight_opening_img, "gray"), plt.title("addweight_opening_img"),plt.axis("off")
         plt.figure("image processing"), plt.subplot(337), plt.imshow(thresh_img, "gray"), plt.title("thresh_img"),plt.axis("off")
-        plt.figure("image processing"), plt.subplot(338), plt.imshow(canny_img, "gray"), plt.title("canny_img"),plt.axis("off")
+        plt.figure("image processing"), plt.subplot(338), plt.imshow(sobel_img, "gray"), plt.title("sobel_img"),plt.axis("off")
         plt.figure("image processing_2"), plt.subplot(331), plt.imshow(morphology_img1, "gray"), plt.title("morphology_img1"),plt.axis("off")
         plt.figure("image processing_2"), plt.subplot(332), plt.imshow(morphology_img2, "gray"), plt.title("morphology_img2"),plt.axis("off")
         plt.figure("image processing_2"), plt.subplot(333), plt.imshow(cv2.cvtColor(draw_alloutline_img,cv2.COLOR_BGR2RGB)), plt.title("draw_alloutline_img"),plt.axis("off")
