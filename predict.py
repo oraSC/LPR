@@ -64,7 +64,6 @@ class carpredictor:
         color_mask_img = self.color_mask(gauss_img)
         #中值滤波
         media_blue_img = cv2.medianBlur(color_mask_img,3)
-        cv2.imshow("HSV_img",media_blue_img)
         #高斯模糊处理
         gauss_img = cv2.GaussianBlur(media_blue_img, (self.gaussian_blur,self.gaussian_blur) , 0)
         gray_gauss_img = cv2.cvtColor(gauss_img.copy(),cv2.COLOR_BGR2GRAY)
@@ -98,36 +97,64 @@ class carpredictor:
         draw_ratio_rect_img = origin_img.copy()
         # 描绘筛选面积后的的矩形
         ratiotrue_num = 0
+        ratiotrue_rect = []
         for i in range(len(contours)):
             cnt = contours[i]
             rect = cv2.minAreaRect(cnt)
             box = cv2.boxPoints(rect)
             box = np.int0(box)
             #长宽比筛选
-            height = math.sqrt(pow(abs(box[0,0]-box[1,0]),2)+pow(abs(box[0,1]-box[1,1]),2))
-            width = math.sqrt(pow(abs(box[1, 0] - box[2, 0]), 2) + pow(abs(box[1, 1] - box[2, 1]), 2))
-            ratio1 = height / width
-            ratio2 = width / height
+              #通过判断box[0] 与中心点的水平位置关系判断车牌左边上倾，还是右边上倾
+            #左边上倾，矩形右下角为bow[0]
+            if rect[0][0] < float(box[0][0]):
+                print("车牌可能左边上倾...")
+                width = math.sqrt(pow(abs(box[0, 0] - box[1, 0]), 2) + pow(abs(box[0, 1] - box[1, 1]), 2))
+                height = math.sqrt(pow(abs(box[1, 0] - box[2, 0]), 2) + pow(abs(box[1, 1] - box[2, 1]), 2))
+            if rect[0][0] > float(box[0][0]):
+                print("车牌可能右边上倾...")
+                height = math.sqrt(pow(abs(box[0,0]-box[1,0]),2)+pow(abs(box[0,1]-box[1,1]),2))
+                width = math.sqrt(pow(abs(box[1, 0] - box[2, 0]), 2) + pow(abs(box[1, 1] - box[2, 1]), 2))
+            ratio =  width / height
             draw_area_rect_img = cv2.drawContours(draw_area_rect_img, [box], 0, (0, 0, 255), 2)
-            print("ratio1: ", ratio1 ,"ratio2: " , ratio2)
             #符合长宽比
-            if (ratio1 > 2 and ratio1 < 5)or(ratio2 > 2 and ratio2 <6):
+            if (ratio > 2 and ratio <6):
                 draw_ratio_rect_img = cv2.drawContours(draw_ratio_rect_img, [box], 0, (0, 0, 255), 2)
+                ratiotrue_rect.append(rect)
                 ratiotrue_num += 1
-        print("长宽比有效矩形：" , ratiotrue_num)
+                print("width:", width);
+                print("height:", height)
+                print("ratio: ", ratio)
+
+        if  ratiotrue_num:
+            print("找到   {}  个长宽比有效矩形".format(ratiotrue_num))
+        else:
+            print("未找到长宽比有效矩形....")
+        #获取有效长宽比有效矩形区域image并进行角度变换
+        temp_img = origin_img.copy()
+        for rect in ratiotrue_rect:
+            #print(rect)
+            box = cv2.boxPoints(rect)
+            box = np.int0(box)
+            temp_img = cv2.drawContours(temp_img, [box], 0, (0, 0, 255), 2)
+
+
+
+
+
+
 
 
         #显示已处理图像
-        plt.figure("image processing"),plt.subplot(321),plt.imshow(cv2.cvtColor(origin_img,cv2.COLOR_BGR2RGB)),plt.title("origin image"),plt.axis("off")
-        plt.figure("image processing"),plt.subplot(322),plt.imshow(cv2.cvtColor(gauss_img,cv2.COLOR_BGR2RGB)),plt.title("gaussianblur image"),plt.axis("off")
-        plt.figure("image processing"), plt.subplot(323), plt.imshow(gray_gauss_img,"gray"), plt.title("gray_gauss_img"),plt.axis("off")
-        plt.figure("image processing"), plt.subplot(324), plt.imshow(sobel_img, "gray"), plt.title("sobel_img"),plt.axis("off")
-        plt.figure("image processing"), plt.subplot(325), plt.imshow(thresh_img, "gray"), plt.title("thresh_img"),plt.axis("off")
-        plt.figure("image processing_2"), plt.subplot(331), plt.imshow(morphology_img1, "gray"), plt.title("morphology_img1"),plt.axis("off")
-        plt.figure("image processing_2"), plt.subplot(332), plt.imshow(morphology_img2, "gray"), plt.title("morphology_img2"),plt.axis("off")
-        plt.figure("image processing_2"), plt.subplot(333), plt.imshow(morphology_img3, "gray"), plt.title("morphology_img3"), plt.axis("off")
-        plt.figure("image processing_2"), plt.subplot(334), plt.imshow(cv2.cvtColor(draw_alloutline_img,cv2.COLOR_BGR2RGB)), plt.title("draw_alloutline_img"),plt.axis("off")
-        plt.figure("image processing_2"), plt.subplot(335), plt.imshow(cv2.cvtColor(draw_area_outline_img,cv2.COLOR_BGR2RGB)), plt.title("draw_area_outline_img"),plt.axis("off")
-        plt.figure("image processing_2"), plt.subplot(336), plt.imshow(cv2.cvtColor(draw_area_rect_img, cv2.COLOR_BGR2RGB)), plt.title("draw_area_rect_img"),plt.axis("off")
-        plt.figure("image processing_2"), plt.subplot(337), plt.imshow(cv2.cvtColor(draw_ratio_rect_img, cv2.COLOR_BGR2RGB)), plt.title("draw_ratio_rect_img"), plt.axis("off")
+        # plt.figure("image processing"),plt.subplot(321),plt.imshow(cv2.cvtColor(origin_img,cv2.COLOR_BGR2RGB)),plt.title("origin image"),plt.axis("off")
+        # plt.figure("image processing"),plt.subplot(322),plt.imshow(cv2.cvtColor(gauss_img,cv2.COLOR_BGR2RGB)),plt.title("gaussianblur image"),plt.axis("off")
+        # plt.figure("image processing"), plt.subplot(323), plt.imshow(gray_gauss_img,"gray"), plt.title("gray_gauss_img"),plt.axis("off")
+        # plt.figure("image processing"), plt.subplot(324), plt.imshow(sobel_img, "gray"), plt.title("sobel_img"),plt.axis("off")
+        # plt.figure("image processing"), plt.subplot(325), plt.imshow(thresh_img, "gray"), plt.title("thresh_img"),plt.axis("off")
+        # plt.figure("image processing_2"), plt.subplot(331), plt.imshow(morphology_img1, "gray"), plt.title("morphology_img1"),plt.axis("off")
+        # plt.figure("image processing_2"), plt.subplot(332), plt.imshow(morphology_img2, "gray"), plt.title("morphology_img2"),plt.axis("off")
+        # plt.figure("image processing_2"), plt.subplot(333), plt.imshow(morphology_img3, "gray"), plt.title("morphology_img3"), plt.axis("off")
+        # plt.figure("image processing_2"), plt.subplot(334), plt.imshow(cv2.cvtColor(draw_alloutline_img,cv2.COLOR_BGR2RGB)), plt.title("draw_alloutline_img"),plt.axis("off")
+        # plt.figure("image processing_2"), plt.subplot(335), plt.imshow(cv2.cvtColor(draw_area_outline_img,cv2.COLOR_BGR2RGB)), plt.title("draw_area_outline_img"),plt.axis("off")
+        # plt.figure("image processing_2"), plt.subplot(336), plt.imshow(cv2.cvtColor(draw_area_rect_img, cv2.COLOR_BGR2RGB)), plt.title("draw_area_rect_img"),plt.axis("off")
+        plt.figure("ratiotrue_rect"), plt.subplot(111), plt.imshow(cv2.cvtColor(draw_ratio_rect_img, cv2.COLOR_BGR2RGB)), plt.title("draw_ratio_rect_img"), plt.axis("off")
         plt.show()
