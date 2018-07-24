@@ -55,9 +55,15 @@ class carpredictor:
         color_mask_img = cv2.bitwise_and(img.copy(), img.copy(), mask=color_HSV_img)
         return color_mask_img
 
+    def point_limit(self , point):
+        if point[0] < 0:
+            point[0] = 0
+        if point[1] < 0:
+            point[1] = 0
     def find_carplate(self , img):
 
         origin_img = img.copy()
+        pic_hight, pic_width = origin_img.shape[:2]
         #高斯模糊处理
         gauss_img = cv2.GaussianBlur(origin_img.copy(), (self.gaussian_blur, self.gaussian_blur), 0)
         # 图像特定颜色区域提取（蓝色与绿色）
@@ -121,21 +127,86 @@ class carpredictor:
                 draw_ratio_rect_img = cv2.drawContours(draw_ratio_rect_img, [box], 0, (0, 0, 255), 2)
                 ratiotrue_rect.append(rect)
                 ratiotrue_num += 1
-                print("width:", width);
-                print("height:", height)
-                print("ratio: ", ratio)
-
-        if  ratiotrue_num:
-            print("找到   {}  个长宽比有效矩形".format(ratiotrue_num))
-        else:
+                # print("width:", width);
+                # print("height:", height)
+                # print("ratio: ", ratio)
+        #判断是否寻找到长宽比有效矩形
+        if  not ratiotrue_num:
             print("未找到长宽比有效矩形....")
-        #获取有效长宽比有效矩形区域image并进行角度变换
-        temp_img = origin_img.copy()
-        for rect in ratiotrue_rect:
-            #print(rect)
-            box = cv2.boxPoints(rect)
-            box = np.int0(box)
-            temp_img = cv2.drawContours(temp_img, [box], 0, (0, 0, 255), 2)
+
+        else:
+            print("找到   {}  个长宽比有效矩形".format(ratiotrue_num))
+            #获取有效长宽比有效矩形区域image并进行角度变换
+            # for rect in ratiotrue_rect:
+            #     print(rect)
+            #     box = cv2.boxPoints(rect)
+            #     box = np.int0(box)
+            #     temp_img = cv2.drawContours(temp_img, [box], 0, (0, 0, 255), 2)
+            card_imgs = []
+            temp = 1
+            for rect in ratiotrue_rect:
+                print(rect)
+                #对于矩形旋转角度为0，改变角度，放置点重叠
+                if rect[2] > -1 and rect[2] < 1:  # 创造角度，使得左、高、右、低拿到正确的值
+                    angle = 1
+                    print("创造角度")
+                else:
+                    angle = rect[2]
+                    print("角度不变")
+                box = cv2.boxPoints(rect)
+                box = np.int0(box)
+                if rect[0][0] < float(box[0][0]):
+                    #print("车牌可能左边上倾...")
+                    rect = (rect[0], (rect[1][0] + 10, rect[1][1] + 15), angle)  # 扩大范围，避免车牌边缘被排除
+                if rect[0][0] > float(box[0][0]):
+                    #print("车牌可能右边上倾...")
+                    rect = (rect[0], (rect[1][0] + 10, rect[1][1] + 10), angle)  # 扩大范围，避免车牌边缘被排除
+
+                box = cv2.boxPoints(rect)
+                heigth_point = right_point = [0, 0]
+                left_point = low_point = [pic_width, pic_hight]
+                #将四个点指向最大值点 #点可能重复
+                 # left_point ----> X最小
+                 # right_point ----> X最大
+                 # low_point ----> Y最小
+                 # height_point ----> Y最大
+                for point in box:
+                    if left_point[0] > point[0]:
+                        left_point = point
+                    if low_point[1] > point[1]:
+                        low_point = point
+                    if heigth_point[1] < point[1]:
+                        heigth_point = point
+                    if right_point[0] < point[0]:
+                        right_point = point
+
+                if left_point[1] <= right_point[1]:  # 正角度
+                    new_right_point = [right_point[0], heigth_point[1]]
+                    pts2 = np.float32([left_point, heigth_point, new_right_point])  # 字符只是高度需要改变
+                    pts1 = np.float32([left_point, heigth_point, right_point])
+                    M = cv2.getAffineTransform(pts1, pts2)
+                    dst = cv2.warpAffine(origin_img.copy(), M, (pic_width, pic_hight))
+                    self.point_limit(new_right_point)
+                    self.point_limit(heigth_point)
+                    self.point_limit(left_point)
+                    card_img = dst[int(left_point[1]):int(heigth_point[1]), int(left_point[0]):int(new_right_point[0])]
+                    card_imgs.append(card_img)
+                    plt.figure("direction correction"),plt.subplot(3 , 2 , temp),plt.imshow(cv2.cvtColor(card_img,cv2.COLOR_BGR2RGB))
+                    temp += 1
+
+                elif left_point[1] > right_point[1]:  # 负角度
+
+                    new_left_point = [left_point[0], heigth_point[1]]
+                    pts2 = np.float32([new_left_point, heigth_point, right_point])  # 字符只是高度需要改变
+                    pts1 = np.float32([left_point, heigth_point, right_point])
+                    M = cv2.getAffineTransform(pts1, pts2)
+                    dst = cv2.warpAffine(origin_img.copy(), M, (pic_width, pic_hight))
+                    self.point_limit(right_point)
+                    self.point_limit(heigth_point)
+                    self.point_limit(new_left_point)
+                    card_img = dst[int(right_point[1]):int(heigth_point[1]), int(new_left_point[0]):int(right_point[0])]
+                    plt.figure("direction correction"), plt.subplot(3, 2, temp), plt.imshow(cv2.cvtColor(card_img, cv2.COLOR_BGR2RGB))
+                    temp += 1
 
 
 
