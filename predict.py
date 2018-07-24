@@ -40,7 +40,6 @@ class carpredictor:
         green_lower = np.array([30, 43, 46])
         green_upper = np.array([77, 255, 255])
 
-
         HSV_img = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2HSV)
         blue_HSV_img = cv2.inRange(HSV_img, blue_lower, blue_upper)
         green_HSV_img = cv2.inRange(HSV_img, green_lower, green_upper)
@@ -55,11 +54,54 @@ class carpredictor:
         color_mask_img = cv2.bitwise_and(img.copy(), img.copy(), mask=color_HSV_img)
         return color_mask_img
 
+    #颜色筛选
+    def color_filter(self, img ,index , blue_lower ,blue_upper , green_lower , green_upper):
+        HSV_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        blue_S = blue_lower[1]
+        green_S = green_lower[1]
+        green_pixelpoint = blue_pixelpoint = 0
+        # 获取图片大小（行列像素点）
+        row, col = img.shape[0:2]
+        all_pixelpoint = row * col
+        # print(row, col, all_pixelpoint)
+        # 遍历像素点，分析像素点颜色
+        # 整行遍历
+        colors = []
+        for r, row_HSV_point in enumerate(HSV_img):
+            # 行 ---> 点遍历
+            for c, HSV_point in enumerate(row_HSV_point):
+                H = HSV_point[0]
+                S = HSV_point[1]
+                V = HSV_point[2]
+                # print("HSV:",H , S ,V)
+                if (35 < H <= 77) and (S > green_S):
+                    green_pixelpoint += 1
+                if (100 < H <= 124) and (S > blue_S):
+                    blue_pixelpoint += 1
+        # print("绿色占比：{:.2f}".format(green_pixelpoint / all_pixelpoint),
+        #       "蓝色占比：{:.2f}".format(blue_pixelpoint / all_pixelpoint))
+        if green_pixelpoint >= blue_pixelpoint:
+            if (green_pixelpoint * 5.1 >= all_pixelpoint):
+                colors.append("green")
+                # print("该矩形绿色居多")
+        elif (blue_pixelpoint * 5.1 >= all_pixelpoint):
+                colors.append("blue")
+                # print("该矩形蓝色居多")
+        #是否符合颜色筛选
+        if colors:
+               return True ,img , HSV_img , colors
+        else :
+               return False ,img , HSV_img , colors
+
+
+
+
     def point_limit(self , point):
         if point[0] < 0:
             point[0] = 0
         if point[1] < 0:
             point[1] = 0
+
     def find_carplate(self , img):
 
         origin_img = img.copy()
@@ -134,7 +176,7 @@ class carpredictor:
         if  not ratiotrue_num:
             print("未找到长宽比有效矩形....")
 
-        else:
+        elif ratiotrue_num > 0:
             print("找到   {}  个长宽比有效矩形".format(ratiotrue_num))
             #获取有效长宽比有效矩形区域image并进行角度变换
             # for rect in ratiotrue_rect:
@@ -142,7 +184,7 @@ class carpredictor:
             #     box = cv2.boxPoints(rect)
             #     box = np.int0(box)
             #     temp_img = cv2.drawContours(temp_img, [box], 0, (0, 0, 255), 2)
-            card_imgs = []
+            cardplate_imgs = []
             temp = 1
             for rect in ratiotrue_rect:
                 print(rect)
@@ -155,6 +197,8 @@ class carpredictor:
                     print("角度不变")
                 box = cv2.boxPoints(rect)
                 box = np.int0(box)
+                # width(box[0] 、box[3] 距离) ：rect[1][0]
+                # height(box[0] 、 box[1] 距离) ：rect[1][1]
                 if rect[0][0] < float(box[0][0]):
                     #print("车牌可能左边上倾...")
                     rect = (rect[0], (rect[1][0] + 10, rect[1][1] + 15), angle)  # 扩大范围，避免车牌边缘被排除
@@ -190,7 +234,7 @@ class carpredictor:
                     self.point_limit(heigth_point)
                     self.point_limit(left_point)
                     card_img = dst[int(left_point[1]):int(heigth_point[1]), int(left_point[0]):int(new_right_point[0])]
-                    card_imgs.append(card_img)
+                    cardplate_imgs.append(card_img)
                     plt.figure("direction correction"),plt.subplot(3 , 2 , temp),plt.imshow(cv2.cvtColor(card_img,cv2.COLOR_BGR2RGB))
                     temp += 1
 
@@ -205,8 +249,58 @@ class carpredictor:
                     self.point_limit(heigth_point)
                     self.point_limit(new_left_point)
                     card_img = dst[int(right_point[1]):int(heigth_point[1]), int(new_left_point[0]):int(right_point[0])]
+                    cardplate_imgs.append(card_img)
                     plt.figure("direction correction"), plt.subplot(3, 2, temp), plt.imshow(cv2.cvtColor(card_img, cv2.COLOR_BGR2RGB))
                     temp += 1
+            blue_lower  = np.array([100, 200, 46])
+            blue_upper  = np.array([124, 255, 255])
+            green_lower = np.array([34, 200, 46])
+            green_upper = np.array([77, 255, 255])
+            blue_S  = blue_lower[1]
+            green_S = green_lower[1]
+            onemore_colorfilter_img = False
+            print("blue_S init:", blue_S, "green_S init", green_S)
+            #颜色定位，并进行筛选（蓝底、绿底）
+            colorfilter_imgs = []
+            carplate_colors = []
+            ###################################################
+            ## 使用这种递减的办法无法处理图片中出现多车牌的情况
+            ###################################################
+            while blue_S > 34 or green_S > 34:
+                for index , maycardplate_img in enumerate(cardplate_imgs) :
+                        T_or_F , colorfilter_img , HSV_img , carplate_color = self.color_filter(maycardplate_img , index , blue_lower ,blue_upper , green_lower , green_upper )
+                        if T_or_F ==True :
+                              onemore_colorfilter_img = True
+                              colorfilter_imgs.append(colorfilter_img)
+                              carplate_colors.append(carplate_color)
+                              # plt.figure("符合颜色"), plt.subplot(3, 2, index + 1), plt.imshow(cv2.cvtColor(colorfilter_img, cv2.COLOR_BGR2RGB))
+                              ######################################################
+                              # 将图片根据颜色扣取的部分可视化
+                              # 调节色调和、饱和度 #车牌饱和度通常较大
+                              # blue_mask = cv2.inRange(HSV_img, blue_lower, blue_upper)
+                              # green_mask = cv2.inRange(HSV_img, green_lower, green_upper)
+                              # color_mask = cv2.bitwise_or(blue_mask, green_mask)
+                              # color_mask_img = cv2.bitwise_and(maycardplate_img, maycardplate_img, mask=color_mask)
+                              # plt.figure("color_fiter"), plt.subplot(3, 2, index + 1), plt.imshow(cv2.cvtColor(color_mask_img, cv2.COLOR_BGR2RGB))
+                              #######################################################
+                        elif T_or_F ==False:
+                              pass
+                #若有图片符合颜色筛选，退出while
+                if   onemore_colorfilter_img == True :
+                       print(print("blue_S final:", blue_S, "green_S final", green_S))
+                       break
+                elif onemore_colorfilter_img ==False :
+                    #未有图片符合颜色筛选，配置饱和度重新筛选
+                    blue_lower[1] -= 1
+                    green_lower[1] -= 1
+                    blue_S = blue_lower[1]
+                    green_S = green_lower[1]
+            if    onemore_colorfilter_img == True :
+                  for index , colorfilter_img in enumerate(colorfilter_imgs):
+                      plt.figure("符合颜色"), plt.subplot(3, 2, index + 1), plt.imshow(cv2.cvtColor(colorfilter_img, cv2.COLOR_BGR2RGB))
+
+
+
 
 
 
@@ -224,8 +318,8 @@ class carpredictor:
         # plt.figure("image processing_2"), plt.subplot(331), plt.imshow(morphology_img1, "gray"), plt.title("morphology_img1"),plt.axis("off")
         # plt.figure("image processing_2"), plt.subplot(332), plt.imshow(morphology_img2, "gray"), plt.title("morphology_img2"),plt.axis("off")
         # plt.figure("image processing_2"), plt.subplot(333), plt.imshow(morphology_img3, "gray"), plt.title("morphology_img3"), plt.axis("off")
-        # plt.figure("image processing_2"), plt.subplot(334), plt.imshow(cv2.cvtColor(draw_alloutline_img,cv2.COLOR_BGR2RGB)), plt.title("draw_alloutline_img"),plt.axis("off")
+        #plt.figure("image processing_2"), plt.subplot(334), plt.imshow(cv2.cvtColor(draw_alloutline_img,cv2.COLOR_BGR2RGB)), plt.title("draw_alloutline_img"),plt.axis("off")
         # plt.figure("image processing_2"), plt.subplot(335), plt.imshow(cv2.cvtColor(draw_area_outline_img,cv2.COLOR_BGR2RGB)), plt.title("draw_area_outline_img"),plt.axis("off")
         # plt.figure("image processing_2"), plt.subplot(336), plt.imshow(cv2.cvtColor(draw_area_rect_img, cv2.COLOR_BGR2RGB)), plt.title("draw_area_rect_img"),plt.axis("off")
-        plt.figure("ratiotrue_rect"), plt.subplot(111), plt.imshow(cv2.cvtColor(draw_ratio_rect_img, cv2.COLOR_BGR2RGB)), plt.title("draw_ratio_rect_img"), plt.axis("off")
+        # plt.figure("ratiotrue_rect"), plt.subplot(111), plt.imshow(cv2.cvtColor(draw_ratio_rect_img, cv2.COLOR_BGR2RGB)), plt.title("draw_ratio_rect_img"), plt.axis("off")
         plt.show()
