@@ -32,9 +32,8 @@ class carpredictor:
 
     class License_rect:
 
-        def __init__(self, img, HSV_img, color, limits):
+        def __init__(self, img, color, limits):
             self.img = img
-            self.HSV_img = HSV_img
             self.color = color
             self.limits = limits
 
@@ -112,9 +111,9 @@ class carpredictor:
                 # print("该矩形蓝色居多")
         #是否符合颜色筛选
         if colors:
-               return True ,img , HSV_img , colors ,(limit_min,limit_max)
+               return True ,img ,  colors ,(limit_min,limit_max)
         else :
-               return False ,img , HSV_img , colors,(limit_min,limit_max)
+               return False ,img , colors,(limit_min,limit_max)
 
     def point_limit(self , point):
         if point[0] < 0:
@@ -124,8 +123,8 @@ class carpredictor:
 
     def cut_palte(self , license_rect):
         img = license_rect.img
-        HSV_img = license_rect.HSV_img
-        img_row , img_col = license_rect.HSV_img.shape[0:2]
+        HSV_img = cv2.cvtColor( img , cv2.COLOR_BGR2HSV )
+        img_row , img_col = HSV_img.shape[0:2]
 
         x_left = img_col
         x_right = 0
@@ -138,7 +137,7 @@ class carpredictor:
             row_limit = 1
             col_limit = 30
             y_top = 0
-        print("{}".format(license_rect.color) , "img_shape" ,license_rect.HSV_img.shape[0:2] )
+        print("{}".format(license_rect.color) , "img_shape" ,img.shape[0:2] )
         for row in range(img_row):
             # 行 ---> 点遍历
             count = 0
@@ -148,7 +147,7 @@ class carpredictor:
                 V = HSV_img.item( row , col , 2)
                 # print("HSV:",H , S ,V)
                 # print(license_rect.limits[0],H,license_rect.limits[1],S)
-                if ( license_rect.limits[0] < H <license_rect.limits[1] )  :
+                if ( license_rect.limits[0] < H <license_rect.limits[1] ) :
                     count += 1
             #y_bottom 标定车牌边界下沿
             #y_top    标定车牌边界上沿
@@ -347,11 +346,11 @@ class carpredictor:
             ###################################################
             while blue_S > 60 or green_S > 60:
                 for index , maycardplate_img in enumerate(cardplate_imgs) :
-                        T_or_F , colorfilter_img , HSV_img , carplate_color ,( limit_min , limit_max ) = self.color_filter(maycardplate_img ,
+                        T_or_F , colorfilter_img , carplate_color ,( limit_min , limit_max ) = self.color_filter(maycardplate_img ,
                                                                                                                            index , blue_lower ,blue_upper , green_lower , green_upper ,)
                         if T_or_F ==True :
                               onemore_colorfilter_img = True
-                              license_rects.append(self.License_rect( colorfilter_img, HSV_img , carplate_color , ( limit_min , limit_max ) ))
+                              license_rects.append(self.License_rect( colorfilter_img, carplate_color , ( limit_min , limit_max ) ))
                               # plt.figure("符合颜色"), plt.subplot(3, 2, index + 1), plt.imshow(cv2.cvtColor(colorfilter_img, cv2.COLOR_BGR2RGB))
                               ######################################################
                               # 将图片根据颜色扣取的部分可视化
