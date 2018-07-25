@@ -4,13 +4,16 @@ from matplotlib import pyplot as plt
 from pylab import mpl         #改matplotlib显示字体格式
 import numpy as np
 import math
+import operator as op
 
 mpl.rcParams['font.sans-serif'] = ['FangSong'] # 指定默认字体（仿宋）
+
+#车牌矩形对象
+
+
 class carpredictor:
     #高斯模糊核
     gaussian_blur = 0
-
-
     def __init__(self):
         # 车牌识别的部分参数保存在js中，便于根据图片分辨率做调整
         #打开配置好的文件，读取json包#文件类型不一定是.js  / .txt也行
@@ -26,6 +29,18 @@ class carpredictor:
                 break
         else:
             raise RuntimeError("没有设置有效配置参数")
+
+    class License_rect:
+
+        def __init__(self, img, HSV_img, color, limits):
+            self.img = img
+            self.HSV_img = HSV_img
+            self.color = color
+            self.limits = limits
+
+
+
+
     #图像特定颜色区域提取（蓝色与绿色）
     def color_mask(self , img):
         # 将颜色空间转换为hsv 提取：蓝色、黄色、白色、黑色、绿色
@@ -63,7 +78,7 @@ class carpredictor:
         # 获取图片大小（行列像素点）
         row, col = img.shape[0:2]
         all_pixelpoint = row * col
-        # print(row, col, all_pixelpoint)
+        # print("shape:" , row, col)
         # 遍历像素点，分析像素点颜色
         # 整行遍历
         colors = []
@@ -74,6 +89,8 @@ class carpredictor:
                 S = HSV_point[1]
                 V = HSV_point[2]
                 # print("HSV:",H , S ,V)
+                limit_min = 0
+                limit_max = 255
                 if (35 < H <= 77) and (S > green_S):
                     green_pixelpoint += 1
                 if (100 < H <= 124) and (S > blue_S):
@@ -83,24 +100,87 @@ class carpredictor:
         if green_pixelpoint >= blue_pixelpoint:
             if (green_pixelpoint * 5.1 >= all_pixelpoint):
                 colors.append("green")
+                #对于绿色车牌，将黄色以及蓝色 H 范围包括
+                limit_min = 26
+                limit_max = 99
                 # print("该矩形绿色居多")
         elif (blue_pixelpoint * 5.1 >= all_pixelpoint):
                 colors.append("blue")
+                # 对于蓝色车牌，将黄色以及蓝色 H 范围包括
+                limit_min = 78
+                limit_max = 155
                 # print("该矩形蓝色居多")
         #是否符合颜色筛选
         if colors:
-               return True ,img , HSV_img , colors
+               return True ,img , HSV_img , colors ,(limit_min,limit_max)
         else :
-               return False ,img , HSV_img , colors
-
-
-
+               return False ,img , HSV_img , colors,(limit_min,limit_max)
 
     def point_limit(self , point):
         if point[0] < 0:
             point[0] = 0
         if point[1] < 0:
             point[1] = 0
+
+    def cut_palte(self , license_rect):
+        img = license_rect.img
+        HSV_img = license_rect.HSV_img
+        img_row , img_col = license_rect.HSV_img.shape[0:2]
+
+        x_left = img_col
+        x_right = 0
+        y_top = img_row
+        y_bottom = 0
+        row_limit = 3
+        col_limit = 30
+        #由于绿色车牌渐变绿的特点，不进行 y_top 方向裁剪
+        if op.eq( license_rect.color , "green"  ) == 0:
+            row_limit = 1
+            col_limit = 30
+            y_top = 0
+        print("{}".format(license_rect.color) , "img_shape" ,license_rect.HSV_img.shape[0:2] )
+        for row in range(img_row):
+            # 行 ---> 点遍历
+            count = 0
+            for col in range(img_col):
+                H = HSV_img.item( row , col , 0)
+                S = HSV_img.item( row , col , 1)
+                V = HSV_img.item( row , col , 2)
+                # print("HSV:",H , S ,V)
+                # print(license_rect.limits[0],H,license_rect.limits[1],S)
+                if ( license_rect.limits[0] < H <license_rect.limits[1] )  :
+                    count += 1
+            #y_bottom 标定车牌边界下沿
+            #y_top    标定车牌边界上沿
+            # print(count)
+            if count >= col_limit :
+                if y_bottom <= row :
+                    y_bottom = row
+                if y_top >= row :
+                    y_top = row
+        for col in range( img_col ):
+            # 列 ---> 点遍历
+            count = 0
+            for row in range( img_row ):
+                H = HSV_img.item( row , col , 0)
+                S = HSV_img.item( row , col , 1)
+                V = HSV_img.item( row , col , 2)
+                # print("HSV:",H , S ,V)
+                if license_rect.limits[0] < H <license_rect.limits[1] and S >60 :
+                    count += 1
+            #y_bottom 标定车牌边界下沿
+            #y_top    标定车牌边界上沿
+            # print(count)
+            if count > row_limit :
+                if x_left > col :
+                    x_left = col
+                if x_right < col :
+                    x_right = col
+        print("y_top" , y_top , "y_bottom: " ,y_bottom )
+        print("x_left", x_left, "x_right: ", x_right)
+        return y_top , y_bottom , x_left , x_right
+
+
 
     def find_carplate(self , img):
 
@@ -261,18 +341,17 @@ class carpredictor:
             onemore_colorfilter_img = False
             print("blue_S init:", blue_S, "green_S init", green_S)
             #颜色定位，并进行筛选（蓝底、绿底）
-            colorfilter_imgs = []
-            carplate_colors = []
+            license_rects = []
             ###################################################
             ## 使用这种递减的办法无法处理图片中出现多车牌的情况
             ###################################################
-            while blue_S > 34 or green_S > 34:
+            while blue_S > 60 or green_S > 60:
                 for index , maycardplate_img in enumerate(cardplate_imgs) :
-                        T_or_F , colorfilter_img , HSV_img , carplate_color = self.color_filter(maycardplate_img , index , blue_lower ,blue_upper , green_lower , green_upper )
+                        T_or_F , colorfilter_img , HSV_img , carplate_color ,( limit_min , limit_max ) = self.color_filter(maycardplate_img ,
+                                                                                                                           index , blue_lower ,blue_upper , green_lower , green_upper ,)
                         if T_or_F ==True :
                               onemore_colorfilter_img = True
-                              colorfilter_imgs.append(colorfilter_img)
-                              carplate_colors.append(carplate_color)
+                              license_rects.append(self.License_rect( colorfilter_img, HSV_img , carplate_color , ( limit_min , limit_max ) ))
                               # plt.figure("符合颜色"), plt.subplot(3, 2, index + 1), plt.imshow(cv2.cvtColor(colorfilter_img, cv2.COLOR_BGR2RGB))
                               ######################################################
                               # 将图片根据颜色扣取的部分可视化
@@ -295,9 +374,12 @@ class carpredictor:
                     green_lower[1] -= 1
                     blue_S = blue_lower[1]
                     green_S = green_lower[1]
-            if    onemore_colorfilter_img == True :
-                  for index , colorfilter_img in enumerate(colorfilter_imgs):
-                      plt.figure("符合颜色"), plt.subplot(3, 2, index + 1), plt.imshow(cv2.cvtColor(colorfilter_img, cv2.COLOR_BGR2RGB))
+            if onemore_colorfilter_img == True :
+                  for index , license_rect in enumerate(license_rects):
+                      plt.figure("车牌矩形"), plt.subplot(3, 2, index + 1), plt.imshow(cv2.cvtColor(license_rect.img, cv2.COLOR_BGR2RGB)), plt.title("符合颜色的矩形")
+                      y_top, y_bottom, x_left, x_right = self.cut_palte(license_rect)
+                      license_rect.img = license_rect.img[ y_top : y_bottom , x_left : x_right ]
+                      plt.figure("车牌矩形"), plt.subplot(3, 2, index +3), plt.imshow(cv2.cvtColor(license_rect.img, cv2.COLOR_BGR2RGB)),plt.title("裁剪后的矩形")
 
 
 
