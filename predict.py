@@ -124,8 +124,8 @@ class carpredictor:
     def cut_palte(self , license_rect):
         img = license_rect.img
         HSV_img = cv2.cvtColor( img , cv2.COLOR_BGR2HSV )
+        color = license_rect.color[0]
         img_row , img_col = HSV_img.shape[0:2]
-
         x_left = img_col
         x_right = 0
         y_top = img_row
@@ -133,7 +133,7 @@ class carpredictor:
         row_limit = 3
         col_limit = 30
         #由于绿色车牌渐变绿的特点，不进行 y_top 方向裁剪
-        if op.eq( license_rect.color , "green"  ) == 0:
+        if op.eq( color , 'green'  ) == True:
             row_limit = 1
             col_limit = 30
             y_top = 0
@@ -175,9 +175,114 @@ class carpredictor:
                     x_left = col
                 if x_right < col :
                     x_right = col
-        print("y_top" , y_top , "y_bottom: " ,y_bottom )
-        print("x_left", x_left, "x_right: ", x_right)
+        # print("y_top" , y_top , "y_bottom: " ,y_bottom )
+        # print("x_left", x_left, "x_right: ", x_right)
         return y_top , y_bottom , x_left , x_right
+    #寻找波峰
+     #判断大于阈值的第一个点
+     #寻找小于阈值并远离起始点两个
+    def find_wave(self , threshold , histogram ):
+        start_point = -1
+        peak = False
+        #判断前边界是否为起始点
+        if histogram[0] > threshold :
+              start_point = 0
+              peak = True
+        peaks_area = []
+        for index , value in enumerate( histogram ) :
+            #未处于峰值区域，寻找下一个峰值起始点
+            if not peak and value >= threshold :
+                   start_point = index
+                   peak = True
+            #若处于峰值区域，判断峰值区域大小
+            if peak and value < threshold :
+                   if index - start_point > 2 :
+                           end_point = index
+                           peaks_area.append( (start_point ,end_point ) )
+                           peak = False
+        ##判断后边界是否为终点
+        if peak and index - start_point > 4 :
+            peaks_area.append((start_point, index))
+        return peaks_area
+
+
+    def peaks_filter(self , peaks , spacing_limit , num_limit):
+        if len(peaks) > num_limit :
+            avrage_width = 0
+            # 宽度均值滤波（去掉最大最小值,但当作peaks总数目不变处理）
+            peaks_max = max(peaks, key=lambda item: item[1] - item[0])
+            peaks_width_max = peaks_max[1] - peaks_max[0]
+            peaks_min = min(peaks, key=lambda item: item[1] - item[0])
+            peaks_width_min = peaks_min[1] - peaks_min[0]
+            for peak in peaks:
+                avrage_width += peak[1] - peak[0]
+                # print(peak[1] - peak[0])
+            avrage_width = (avrage_width - peaks_width_max - peaks_width_min) / (len(peaks))
+            print("avrage:", avrage_width)
+            peaks_copy = peaks.copy()
+            #波峰筛选
+             #波峰宽度筛选
+             #波峰邻距筛选
+            for item in range(len(peaks_copy)):
+                peak_width = peaks_copy[item][1] - peaks_copy[item][0]
+                if peak_width < avrage_width:
+                    # (0 , 0)代表不和相邻的波峰合并
+                    # (0 , 1)代表和相邻的右侧波峰合并
+                    # (1 , 0)代表和相邻的做侧波峰合并
+                    peaks[item] = (0, 0)
+                    # 判断是否为左右侧波峰
+                    # if   item == 0  :
+                    #         if (peaks_area_copy[item + 1][0] - peaks_area_copy[item][1]) > spacing_limit :
+                    #             pass
+                    # elif item == len(peaks_area_copy ) -1 :
+                    #         if (peaks_area_copy[item][0] - peaks_area_copy[item - 1][1]) > spacing_limit :
+                    #             pass
+                    #
+                    # elif (peaks_area_copy[item ][0] - peaks_area_copy[item - 1][1])> spacing_limit :
+                    #             # 在原波峰组中删除该波峰
+                    #             peaks_area[item][0] = (1, 0)
+            item = 0
+            while (1):
+                if item > len(peaks) - 1:
+                    break
+                if peaks[item] == (0, 0):
+                    peaks.pop(item)
+                elif peaks[item] != (0, 0):
+                    item += 1
+            print("peaks_width_filter : peaks :" , peaks , "num : " , len(peaks))
+            if len(peaks) > num_limit :
+                spacings = []
+                # 间距最值滤波
+                for index in range( len( peaks ) - 1  ):
+                    spacings.append(peaks[index + 1][0] - peaks[index][1] )
+                    print(peaks[index + 1][0] - peaks[index][1])
+                #间距干扰峰波通常在两端
+                 #最大间距通常为第二个字符与第三个字符之间的距离
+                spacing_max = max(spacings)
+                print( spacing_max == spacings[0] )
+                while spacing_max != spacings[1] :
+                    spacing_max_L = spacing_max
+                    if spacing_max == spacings[1] :
+                            break
+                    elif spacing_max == spacings[0] :
+                            spacings.pop(0)
+                            peaks.pop(0)
+                    elif spacing_max == spacings[-1] :
+                            spacings.pop(-1)
+                            peaks.pop(-1)
+                    spacing_max = max(spacings)
+                    #与之前的间距一样
+                    if spacing_max == spacing_max_L :
+                        break
+                print("peaks_spacing_filter : peaks :" , peaks , "num : " , len(peaks))
+            return peaks
+        else :
+            return peaks
+
+
+
+
+
 
 
 
@@ -314,8 +419,8 @@ class carpredictor:
                     self.point_limit(left_point)
                     card_img = dst[int(left_point[1]):int(heigth_point[1]), int(left_point[0]):int(new_right_point[0])]
                     cardplate_imgs.append(card_img)
-                    plt.figure("direction correction"),plt.subplot(3 , 2 , temp),plt.imshow(cv2.cvtColor(card_img,cv2.COLOR_BGR2RGB))
-                    temp += 1
+                    # plt.figure("矩形仿射变换"),plt.subplot(3 , 2 , temp),plt.imshow(cv2.cvtColor(card_img,cv2.COLOR_BGR2RGB))
+                    # temp += 1
 
                 elif left_point[1] > right_point[1]:  # 负角度
 
@@ -329,8 +434,8 @@ class carpredictor:
                     self.point_limit(new_left_point)
                     card_img = dst[int(right_point[1]):int(heigth_point[1]), int(new_left_point[0]):int(right_point[0])]
                     cardplate_imgs.append(card_img)
-                    plt.figure("direction correction"), plt.subplot(3, 2, temp), plt.imshow(cv2.cvtColor(card_img, cv2.COLOR_BGR2RGB))
-                    temp += 1
+                    # plt.figure("矩形仿射变换"), plt.subplot(3, 2, temp), plt.imshow(cv2.cvtColor(card_img, cv2.COLOR_BGR2RGB))
+                    # temp += 1
             blue_lower  = np.array([100, 200, 46])
             blue_upper  = np.array([124, 255, 255])
             green_lower = np.array([34, 200, 46])
@@ -374,13 +479,78 @@ class carpredictor:
                     blue_S = blue_lower[1]
                     green_S = green_lower[1]
             if onemore_colorfilter_img == True :
+                  #裁剪车牌，去除非车牌边界
                   for index , license_rect in enumerate(license_rects):
-                      plt.figure("车牌矩形"), plt.subplot(3, 2, index + 1), plt.imshow(cv2.cvtColor(license_rect.img, cv2.COLOR_BGR2RGB)), plt.title("符合颜色的矩形")
+                      # plt.figure("符合颜色筛选的矩形"), plt.subplot(3, 2, index + ???), plt.imshow(cv2.cvtColor(license_rect.img, cv2.COLOR_BGR2RGB)), plt.title("符合颜色的矩形")
                       y_top, y_bottom, x_left, x_right = self.cut_palte(license_rect)
                       license_rect.img = license_rect.img[ y_top : y_bottom , x_left : x_right ]
-                      plt.figure("车牌矩形"), plt.subplot(3, 2, index +3), plt.imshow(cv2.cvtColor(license_rect.img, cv2.COLOR_BGR2RGB)),plt.title("裁剪后的矩形")
+                      # plt.figure("车牌矩形"), plt.subplot(2,1, index +1 ), plt.imshow(cv2.cvtColor(license_rect.img, cv2.COLOR_BGR2RGB)),plt.title("定位到的车牌")
+                  #车牌字符分割
+                  for index, license_rect in enumerate(license_rects):
+                      img = license_rect.img
+                      color = license_rect.color[0]
+                      gray_img = cv2.cvtColor( img , cv2.COLOR_BGR2GRAY)
 
-
+                      plt.figure("车牌字符分割"), plt.subplot(3, 3, index + 1), plt.imshow(gray_img, "gray"),plt.title("gray_img")
+                      ret , thresh_img = cv2.threshold( gray_img ,0 , 255 , cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                      #将二值化图像都转化为黑底白字
+                      if op.eq( color , "green" ) == True :
+                          thresh_img = cv2.bitwise_not(thresh_img , thresh_img)
+                      plt.figure("车牌字符分割"), plt.subplot(3, 3, index + 2), plt.imshow(thresh_img, "gray"), plt.title("thresh_img")
+                      #查找水平直方图波峰
+                        #判断并裁减车牌的高度
+                      #在 Y 方向进行腐蚀
+                      element = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 3))
+                      y_erode_img = cv2.erode( thresh_img ,element , iterations = 1  )
+                      plt.figure("车牌字符分割"), plt.subplot(3, 3, index + 3), plt.imshow(y_erode_img, "gray"), plt.title("Y 方向腐蚀")
+                      x_histogram = np.sum(y_erode_img , axis = 1) #压缩成一列
+                      #绘制水平方向直方图
+                      # for i , value in enumerate( x_histogram ) :
+                      #      plt.figure("水平方向直方图"),plt.bar( i , value ,width = 1 , facecolor = "black" ,edgecolor = "white")
+                      x_min = np.min( x_histogram )
+                      x_max = np.max( x_histogram )
+                      #去掉最大最小，过滤异常波峰
+                      x_average = (np.sum( x_histogram ) - x_min - x_max ) / x_histogram.shape[0]
+                      x_threshold = ( x_min + x_average ) / 2
+                      peaks = self.find_wave(x_threshold , x_histogram )
+                      # print(peaks_area)
+                      peaks_width_max = max(peaks , key = lambda item : item[1] - item[0] )
+                      # print(peaks_area_max)
+                      thresh_img_y = thresh_img[ peaks_width_max[0] : peaks_width_max[1] ]
+                      plt.figure("车牌字符分割"), plt.subplot(3, 3, index + 4), plt.imshow(thresh_img_y, "gray"), plt.title("Y方向分割字符完成")
+                      #查找垂直方向直方图波峰
+                      # row_img , col_img = thresh_img.shape[0:2]
+                      # thresh_img = thresh_img[1 : row_img -1 ]
+                      # #防止白边影响阈值判断
+                      # plt.figure("车牌字符分割"), plt.subplot(3, 2, index + ？？？), plt.imshow(thresh_img, "gray"), plt.title("顶部底部各裁一行")
+                      # 在 XY 方向进行腐蚀
+                      element = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 2))
+                      xy_erode_img = cv2.erode(thresh_img_y, element, iterations=1)
+                      element = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 1))
+                      xy_erode_img = cv2.erode(xy_erode_img, element, iterations=1)
+                      plt.figure("车牌字符分割"), plt.subplot(3, 3, index + 5), plt.imshow(xy_erode_img, "gray"), plt.title("XY 方向同时腐蚀")
+                      #获得可允许的波峰之间的最小距离
+                      spacing_limit = xy_erode_img.shape[1] / 100
+                      print("spacing_limit : " , spacing_limit )
+                      y_histogram = np.sum(xy_erode_img, axis=0)  # 压缩成一列
+                      for index2, value in enumerate(y_histogram):
+                          plt.figure("垂直方向直方图"), plt.bar(index2, value, width=1, facecolor="black", edgecolor="white")
+                      y_min = np.min(y_histogram)
+                      y_max = np.max(y_histogram)
+                      # 去掉最大最小，过滤异常波峰
+                      y_average = (np.sum(y_histogram) - y_min - y_max) / y_histogram.shape[0]
+                      y_threshold = (y_min + y_average) / 5
+                      peaks = self.find_wave(y_threshold, y_histogram)
+                      print(peaks)
+                      peaks = self.peaks_filter(peaks , spacing_limit , 7)
+                      # if len(peaks) != 7 :
+                      #     print("404 : 字符个数不符合要求 ，寻找车牌字符失败......")
+                      # else :
+                      plate_num_pieces = []
+                      for item in range(len(peaks) ) :
+                          plate_num_pieces.append( thresh_img_y[ 0 : thresh_img_y.shape[0] ,peaks[item][0] : peaks[item][1] ])
+                      for item , num_piece in enumerate(plate_num_pieces) :
+                          plt.figure("车牌字符分割结果"),plt.subplot(3 , 3 , item + 1) , plt.imshow(num_piece , "gray")
 
 
 
