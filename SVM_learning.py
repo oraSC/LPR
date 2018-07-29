@@ -45,13 +45,16 @@ fig3 = plt.figure(3)
 plt.plot(pt[: ,0], pt[: ,1], 'o', label = "all_ex_data")
 print("pt" , pt)
 #通过训练样本得到的predict, 将实验数据传递给predict，predict根据训练样本计算实验数据分类，按照顺序给 0，   1. 分类序号
-( ret , res ) = svm.predict( pt )
+ret , res = svm.predict( pt )
 print("pt", pt)
-
+print("res:" , res.ravel())
 res = np.hstack((res , res))
 #相当于挑选出res对应为 1 的pt
 type_data = pt[ res < 0.5]
+print("type_data:" , type_data)
+print("type_data", type_data.ravel())
 type_data = np.reshape(type_data, (int(type_data.shape[0] / 2), 2))
+print("type_data:" , type_data)
 fig3,plt.plot(type_data[:,0], type_data[:,1], '+',label = "type_1_data")
 
 type_data = pt[ res >= 0.5]

@@ -52,6 +52,7 @@ class Interface(ttk.Frame):
             # from_vedio_ctl = ttk.Button(frame_right2, text="来自摄像头", width=20, command=self.from_vedio)
             from_pic_button.pack(anchor="se", pady="1")
             self.predictor = predict.carpredictor()
+            self.predictor.train_svm()
 
         def get_imgtk(self, img_bgr):
             #bgr颜色空间转化为rgb颜色空间
